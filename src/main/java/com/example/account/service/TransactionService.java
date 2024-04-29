@@ -76,7 +76,7 @@ public class TransactionService {
             Account account) {
         return transactionRepository.save(
                 Transaction.builder()
-                        .transactionType(TransactionType.USE)
+                        .transactionType(transactionType)
                         .transactionResult(transactionResultType)
                         .account(account)
                         .amount(amount)
