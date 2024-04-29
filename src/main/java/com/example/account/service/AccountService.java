@@ -7,15 +7,17 @@ import com.example.account.exception.AccountException;
 import com.example.account.repository.AccountRepository;
 import com.example.account.repository.AccountUserRepository;
 import com.example.account.type.AccountStatus;
-import com.example.account.type.ErrorCode;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static com.example.account.type.AccountStatus.IN_USE;
+import static com.example.account.type.ErrorCode.*;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +34,7 @@ public class AccountService {
     public AccountDto createAccount(Long userId, Long initialBalance) {
         AccountUser accountUser = accountUserRepository.findById(userId)
                 // 없으면 exception throw
-                .orElseThrow(() -> new AccountException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new AccountException(USER_NOT_FOUND));
 
         validateCreateAccount(accountUser);
 
@@ -54,7 +56,7 @@ public class AccountService {
 
     private void validateCreateAccount(AccountUser accountUser) {
         if (accountRepository.countByAccountUser(accountUser) >= 10) {
-            throw new AccountException(ErrorCode.MAX_ACCOUNT_PER_USER_10);
+            throw new AccountException(MAX_ACCOUNT_PER_USER_10);
         }
     }
 
@@ -70,10 +72,10 @@ public class AccountService {
     public AccountDto deleteAccount(Long userId, String accountNumber) {
         // 사용자 확인
         AccountUser user = accountUserRepository.findById(userId).orElseThrow(
-                () -> new AccountException(ErrorCode.USER_NOT_FOUND));
+                () -> new AccountException(USER_NOT_FOUND));
         // 계좌 확인
         Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(()->new AccountException(ErrorCode.ACCOUNT_NOT_FOUND));
+                .orElseThrow(() -> new AccountException(ACCOUNT_NOT_FOUND));
 
         validateDeleteAccount(user, account);
 
@@ -81,21 +83,35 @@ public class AccountService {
         account.setAccountStatus(AccountStatus.UNREGISTERED);
         account.setUnRegisteredAt(LocalDateTime.now());
 
+        accountRepository.save(account); // 테스트를 위한 코드
+
         return AccountDto.fromEntity(account);
     }
 
     private void validateDeleteAccount(AccountUser user, Account account) {
         // 사용자 아이디 - 계좌 소유주 확인
         if (!Objects.equals(user.getId(), account.getAccountUser().getId())) {
-            throw new AccountException(ErrorCode.USER_ACCOUNT_UN_MATCH);
+            throw new AccountException(USER_ACCOUNT_UN_MATCH);
         }
         // 계좌 상태 확인
         if (account.getAccountStatus() == AccountStatus.UNREGISTERED) {
-            throw new AccountException(ErrorCode.ACCOUNT_ALREADY_UNREGISTERED);
+            throw new AccountException(ACCOUNT_ALREADY_UNREGISTERED);
         }
         // 잔액 확인
         if (account.getBalance() > 0) {
-            throw new AccountException(ErrorCode.ACCOUNT_NOT_EMPTY);
+            throw new AccountException(ACCOUNT_NOT_EMPTY);
         }
+    }
+
+    @Transactional
+    public List<AccountDto> getAccountsByUserId(Long userId) {
+        AccountUser accountUser = accountUserRepository.findById(userId)
+                .orElseThrow(() -> new AccountException(USER_NOT_FOUND));
+
+        List<Account> accounts =
+                accountRepository.findByAccountUser(accountUser);
+
+        return accounts.stream().map(AccountDto::fromEntity)
+                .collect(Collectors.toList());
     }
 }
